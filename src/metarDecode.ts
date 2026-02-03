@@ -29,7 +29,7 @@ export function decodeMetar(raw: string): DecodedMetar {
       ? `${formatTemp(tempMatch[1])} / ${formatTemp(tempMatch[2])}`
       : undefined;
 
-    const issued = timeMatch ? `${timeMatch[2]}:${timeMatch[3]}Z (day ${timeMatch[1]})` : undefined;
+    const issued = timeMatch ? `${timeMatch[2]}:${timeMatch[3]}Z` : undefined;
 
     const ceiling = cloudMatch ? `${cloudMatch[1]} @ ${(Number(cloudMatch[2]) * 100).toFixed(0)} ft` : undefined;
 
