@@ -138,6 +138,12 @@ export const ArrowUp = makeIcon(
   </>
 );
 
+export const ChevronDown = makeIcon(
+  <>
+    <polyline points="6 9 12 15 18 9" />
+  </>
+);
+
 export default {
   RefreshCw,
   Navigation,
