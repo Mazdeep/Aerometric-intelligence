@@ -1,6 +1,7 @@
 import { useState } from 'react';
-import { DecodedMetar, VatsimAirportInfo } from '../types';
-import { buildMetarDisplay } from '../utils/metarDisplay';
+import { DecodedMetar } from '../types';
+import { buildKpis } from '../utils/parseKpis';
+import KpiTile from './KpiTile';
 import {
   ChevronDown,
 } from '../icons';
@@ -9,83 +10,73 @@ interface Props {
   icao: string;
   raw: string;
   decoded: DecodedMetar;
-  airportInfo?: VatsimAirportInfo | null;
 }
 
-export function VatsimMetarCard({ icao, raw, decoded, airportInfo }: Props) {
+type FlightCategory = 'vfr' | 'mvfr' | 'ifr';
+
+function deriveCategory(decoded: DecodedMetar): FlightCategory | null {
+  let ceilingFt: number | null = null;
+  let visM: number | null = null;
+
+  if (decoded.ceiling) {
+    const m = decoded.ceiling.match(/@ (\d+) ft/);
+    if (m) ceilingFt = Number(m[1]);
+  }
+  if (decoded.visibility) {
+    const m = decoded.visibility.match(/(\d+) m/);
+    if (m) visM = Number(m[1]);
+  }
+
+  if (ceilingFt === null && visM === null) return null;
+  if ((ceilingFt !== null && ceilingFt < 1000) || (visM !== null && visM < 1600)) return 'ifr';
+  if ((ceilingFt !== null && ceilingFt < 3000) || (visM !== null && visM < 5000)) return 'mvfr';
+  return 'vfr';
+}
+
+function pickWeatherIconClass(raw: string): string {
+  const r = raw.toUpperCase();
+  if (r.includes('TS')) return 'wi-thunderstorm storm';
+  if (r.includes('SN') || r.includes('RASN')) return 'wi-snow snow';
+  if (r.includes('RA')) return 'wi-rain rain';
+  if (r.includes('FG') || r.includes('BR') || r.includes('HZ')) return 'wi-fog fog';
+  if (r.includes('SKC') || r.includes('CAVOK')) return 'wi-day-sunny clear';
+  if (r.includes('OVC') || r.includes('BKN')) return 'wi-cloudy cloudy';
+  return 'wi-day-sunny-overcast cloudy';
+}
+
+export function VatsimMetarCard({ icao, raw, decoded }: Props) {
   const [showRaw, setShowRaw] = useState(false);
-  const display = buildMetarDisplay(raw, decoded);
-  const airportRows = buildAirportRows(airportInfo);
+  const category = deriveCategory(decoded);
+  const kpis = buildKpis(decoded);
 
   return (
-    <article className="metar-card metar-card--lookup card-anim" aria-label={`METAR for ${icao}`}>
-      <header className="metar-card__header">
-        <div className="metar-card__identity">
-          <div className="metar-card__title-row">
-            <h2>{icao}</h2>
-            {airportInfo?.iata && <span className="airport-code-badge">{airportInfo.iata}</span>}
-          </div>
-          <p>{airportInfo?.name ?? 'Live METAR'}</p>
+    <article className="card glass card-anim" aria-label={`METAR for ${icao}`}>
+      <header className="card__header">
+        <div>
+          <p className="card__eyebrow">Live METAR · VATSIM</p>
+          <h2 className="card__title">{icao}</h2>
+          {decoded.issued && (
+            <p className="card__subtitle">{decoded.issued}</p>
+          )}
         </div>
-        {decoded.issued && <span className="metar-card__obs">OBS {decoded.issued}</span>}
+        <div className="card__meta">
+          {category && (
+            <span className={`pill pill--${category}`}>{category.toUpperCase()}</span>
+          )}
+          <div className="weather-icon" aria-hidden="true">
+            <i className={`wi ${pickWeatherIconClass(raw)}`} />
+          </div>
+        </div>
       </header>
 
-      <div className="metar-card__rule" />
-
-      <section className="metar-card__primary" aria-label={`${icao} primary weather`}>
-        <div className="primary-stat">
-          <span className="primary-stat__label">{display.qnh.label}</span>
-          <div className="primary-stat__value">
-            <strong>{display.qnh.value}</strong>
-            {display.qnh.unit && <span>{display.qnh.unit}</span>}
-          </div>
-          {display.qnh.secondary && <p>{display.qnh.secondary}</p>}
+      {kpis.length > 0 ? (
+        <div className="kpi-grid">
+          {kpis.map((kpi, i) => (
+            <KpiTile key={`${kpi.kind}-${i}`} kpi={kpi} />
+          ))}
         </div>
-
-        <div className="primary-stat primary-stat--temperature">
-          <span className="primary-stat__label">{display.temperature.label}</span>
-          <div className="primary-stat__value">
-            <strong>{display.temperature.value}</strong>
-            {display.temperature.unit && <span>{display.temperature.unit}</span>}
-          </div>
-          {display.temperature.secondary && <p>{display.temperature.secondary}</p>}
-        </div>
-      </section>
-
-      <div className="metar-card__rule" />
-
-      <section className="wind-block" aria-label={`${icao} wind`}>
-        <span className="primary-stat__label">{display.wind.label}</span>
-        <div className="primary-stat__value">
-          <strong>{display.wind.value}</strong>
-          {display.wind.unit && <span>{display.wind.unit}</span>}
-        </div>
-        {display.wind.secondary && <p>{display.wind.secondary}</p>}
-      </section>
-
-      <div className="metar-card__rule" />
-
-      <dl className="metar-details">
-        {display.rows.map((row) => (
-          <div className="metar-details__row" key={row.label}>
-            <dt>{row.label}</dt>
-            <dd>{row.value}</dd>
-          </div>
-        ))}
-      </dl>
-
-      {airportRows.length > 0 && (
-        <>
-          <div className="metar-card__rule" />
-          <dl className="metar-details metar-details--airport">
-            {airportRows.map((row) => (
-              <div className="metar-details__row" key={row.label}>
-                <dt>{row.label}</dt>
-                <dd>{row.value}</dd>
-              </div>
-            ))}
-          </dl>
-        </>
+      ) : (
+        <p className="muted kpi-empty">No decoded data available</p>
       )}
 
       <button
@@ -95,11 +86,11 @@ export function VatsimMetarCard({ icao, raw, decoded, airportInfo }: Props) {
         type="button"
       >
         <ChevronDown size={14} className="raw-toggle__chevron" />
-        Show raw METAR
+        Raw METAR
       </button>
 
       {showRaw && (
-        <div className="metar-raw" aria-label="Raw METAR">
+        <div className="metar-raw glass-soft" aria-label="Raw METAR">
           <code>{raw}</code>
         </div>
       )}
@@ -108,28 +99,3 @@ export function VatsimMetarCard({ icao, raw, decoded, airportInfo }: Props) {
 }
 
 export default VatsimMetarCard;
-
-function buildAirportRows(airportInfo?: VatsimAirportInfo | null) {
-  if (!airportInfo) return [];
-
-  const rows: Array<{ label: string; value: string }> = [];
-  const location = [airportInfo.city, airportInfo.country].filter(Boolean).join(', ');
-  const transition = [airportInfo.transition_alt ? `${airportInfo.transition_alt.toLocaleString('en-US')} ft` : null, airportInfo.transition_level]
-    .filter(Boolean)
-    .join(' / ');
-  const stations = airportInfo.stations
-    ?.filter((station) => station.callsign && station.frequency)
-    .slice(0, 3)
-    .map((station) => `${station.callsign} ${station.frequency}`)
-    .join(' · ');
-
-  if (location) rows.push({ label: 'Airport', value: location });
-  if (typeof airportInfo.altitude_ft === 'number') {
-    rows.push({ label: 'Elevation', value: `${airportInfo.altitude_ft.toLocaleString('en-US')} ft` });
-  }
-  if (airportInfo.fir_code) rows.push({ label: 'FIR', value: airportInfo.fir_code });
-  if (transition) rows.push({ label: 'Transition', value: transition });
-  if (stations) rows.push({ label: 'Stations', value: stations });
-
-  return rows;
-}

@@ -20,6 +20,6 @@ const airport: AirportMetar = {
 test('renders raw and decoded METAR', () => {
   render(<AirportCard airport={airport} />);
   expect(screen.getByText(/TEST/)).toBeInTheDocument();
-  expect(screen.getByText(/Show raw METAR/)).toBeInTheDocument();
+  expect(screen.getByText(/Raw METAR/)).toBeInTheDocument();
   expect(screen.getByText(/Wind/)).toBeInTheDocument();
 });

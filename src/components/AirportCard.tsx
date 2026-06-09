@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { AirportMetar } from '../types';
-import { buildMetarDisplay } from '../utils/metarDisplay';
+import { buildKpis } from '../utils/parseKpis';
+import KpiTile from './KpiTile';
 import {
   ChevronDown,
 } from '../icons';
@@ -23,67 +24,54 @@ function formatIsoTime(iso: string): string {
   return `${hh}:${mm}Z`;
 }
 
+function pickWeatherIconClass(airport: AirportMetar): string {
+  const raw = airport.metarRaw.toUpperCase();
+  if (raw.includes('TS')) return 'wi-thunderstorm storm';
+  if (raw.includes('SN') || raw.includes('RASN')) return 'wi-snow snow';
+  if (raw.includes('RA')) return 'wi-rain rain';
+  if (raw.includes('FG') || raw.includes('BR') || raw.includes('HZ')) return 'wi-fog fog';
+  if (airport.metarCategory?.toLowerCase() === 'vfr') return 'wi-day-sunny clear';
+  if (airport.metarCategory?.toLowerCase() === 'ifr') return 'wi-cloudy cloudy';
+  return 'wi-day-sunny-overcast cloudy';
+}
+
 export function AirportCard({ airport }: Props) {
   const [showRaw, setShowRaw] = useState(false);
-  const { icao, iataCode, name, metarRaw, decoded, metarTime, role } = airport;
-  const display = buildMetarDisplay(metarRaw, decoded);
+  const { icao, name, metarRaw, decoded, metarTime, metarCategory, role } = airport;
+  const kpis = decoded ? buildKpis(decoded) : [];
 
   return (
-    <article className="metar-card card-anim" aria-label={`${roleLabel[role]} ${icao}`}>
-      <header className="metar-card__header">
-        <div className="metar-card__identity">
-          <div className="metar-card__title-row">
-            <h2>{icao}</h2>
-            {iataCode && <span className="airport-code-badge">{iataCode}</span>}
-          </div>
-          {name && <p>{name}</p>}
+    <article className="card glass card-anim" aria-label={`${roleLabel[role]} ${icao}`}>
+      <header className="card__header">
+        <div>
+          <p className="card__eyebrow">{roleLabel[role]}</p>
+          <h2 className="card__title">{icao}</h2>
+          {name && <p className="card__subtitle">{name}</p>}
         </div>
-        {metarTime && <span className="metar-card__obs">OBS {formatIsoTime(metarTime)}</span>}
+        <div className="card__meta">
+          {metarCategory && (
+            <span className={`pill pill--${metarCategory.toLowerCase()}`}>
+              {metarCategory.toUpperCase()}
+            </span>
+          )}
+          {metarTime && (
+            <span className="pill pill--ghost">{formatIsoTime(metarTime)}</span>
+          )}
+          <div className="weather-icon" aria-hidden="true">
+            <i className={`wi ${pickWeatherIconClass(airport)}`} />
+          </div>
+        </div>
       </header>
 
-      <div className="metar-card__rule" />
-
-      <section className="metar-card__primary" aria-label={`${icao} primary weather`}>
-        <div className="primary-stat">
-          <span className="primary-stat__label">{display.qnh.label}</span>
-          <div className="primary-stat__value">
-            <strong>{display.qnh.value}</strong>
-            {display.qnh.unit && <span>{display.qnh.unit}</span>}
-          </div>
-          {display.qnh.secondary && <p>{display.qnh.secondary}</p>}
+      {kpis.length > 0 ? (
+        <div className="kpi-grid">
+          {kpis.map((kpi, i) => (
+            <KpiTile key={`${kpi.kind}-${i}`} kpi={kpi} />
+          ))}
         </div>
-
-        <div className="primary-stat primary-stat--temperature">
-          <span className="primary-stat__label">{display.temperature.label}</span>
-          <div className="primary-stat__value">
-            <strong>{display.temperature.value}</strong>
-            {display.temperature.unit && <span>{display.temperature.unit}</span>}
-          </div>
-          {display.temperature.secondary && <p>{display.temperature.secondary}</p>}
-        </div>
-      </section>
-
-      <div className="metar-card__rule" />
-
-      <section className="wind-block" aria-label={`${icao} wind`}>
-        <span className="primary-stat__label">{display.wind.label}</span>
-        <div className="primary-stat__value">
-          <strong>{display.wind.value}</strong>
-          {display.wind.unit && <span>{display.wind.unit}</span>}
-        </div>
-        {display.wind.secondary && <p>{display.wind.secondary}</p>}
-      </section>
-
-      <div className="metar-card__rule" />
-
-      <dl className="metar-details">
-        {display.rows.map((row) => (
-          <div className="metar-details__row" key={row.label}>
-            <dt>{row.label}</dt>
-            <dd>{row.value}</dd>
-          </div>
-        ))}
-      </dl>
+      ) : (
+        <p className="muted kpi-empty">No decoded data available</p>
+      )}
 
       <button
         className={`raw-toggle${showRaw ? ' raw-toggle--open' : ''}`}
@@ -92,11 +80,11 @@ export function AirportCard({ airport }: Props) {
         type="button"
       >
         <ChevronDown size={14} className="raw-toggle__chevron" />
-        Show raw METAR
+        Raw METAR
       </button>
 
       {showRaw && (
-        <div className="metar-raw" aria-label="Raw METAR">
+        <div className="metar-raw glass-soft" aria-label="Raw METAR">
           <code>{metarRaw}</code>
         </div>
       )}
