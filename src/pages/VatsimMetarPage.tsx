@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { decodeMetar } from '../metarDecode';
-import { DecodedMetar } from '../types';
-import { RefreshCw } from '../icons';
+import { DecodedMetar, VatsimAirportInfo } from '../types';
+import { fetchVatsimAirportInfo, fetchVatsimMetar } from '../api/vatsim';
 import VatsimMetarCard from '../components/VatsimMetarCard';
 
 type FetchStatus = 'idle' | 'loading' | 'ready' | 'error';
@@ -10,17 +10,10 @@ interface VatsimResult {
   icao: string;
   raw: string;
   decoded: DecodedMetar;
+  airportInfo: VatsimAirportInfo | null;
 }
 
-async function fetchVatsimMetar(icao: string): Promise<string> {
-  const res = await fetch(`https://metar.vatsim.net/${icao}`);
-  if (!res.ok) throw new Error(`Server returned HTTP ${res.status}`);
-  const text = (await res.text()).trim();
-  if (!text) throw new Error(`No METAR available for ${icao} on VATSIM`);
-  return text;
-}
-
-const QUICK_PICKS = ['EGLL', 'EIDW', 'KJFK', 'KLAX', 'EDDF', 'OMDB'];
+const QUICK_PICKS = ['EGLL', 'KSEA', 'OMDB', 'EHAM', 'LEBL'];
 
 export function VatsimMetarPage() {
   const [icao, setIcao] = useState('');
@@ -35,8 +28,11 @@ export function VatsimMetarPage() {
     setError('');
     setResult(null);
     try {
-      const raw = await fetchVatsimMetar(trimmed);
-      setResult({ icao: trimmed, raw, decoded: decodeMetar(raw) });
+      const [raw, airportInfo] = await Promise.all([
+        fetchVatsimMetar(trimmed),
+        fetchVatsimAirportInfo(trimmed).catch(() => null),
+      ]);
+      setResult({ icao: trimmed, raw, decoded: decodeMetar(raw), airportInfo });
       setStatus('ready');
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to fetch METAR');
@@ -51,44 +47,40 @@ export function VatsimMetarPage() {
 
   return (
     <main className="page" aria-live="polite">
-      <header className="hero glass">
-        <div>
-          <p className="eyebrow">VATSIM • Live METAR</p>
-          <h1>Live METAR Lookup</h1>
-          <p className="muted">Enter any ICAO code to fetch the latest real-time METAR from VATSIM.</p>
+      <form className="lookup-search" onSubmit={handleSubmit} aria-label="ICAO search">
+        <label className="lookup-search__label" htmlFor="icao-search">ICAO</label>
+        <div className="lookup-search__field">
+          <input
+            id="icao-search"
+            className="lookup-search__input"
+            type="text"
+            value={icao}
+            onChange={(e) => setIcao(e.target.value.toUpperCase())}
+            placeholder="E.G. EGLL"
+            maxLength={4}
+            minLength={3}
+            spellCheck={false}
+            autoComplete="off"
+            autoCorrect="off"
+            autoCapitalize="characters"
+            aria-label="ICAO airport code"
+          />
         </div>
-      </header>
-
-      <form className="vatsim-search glass" onSubmit={handleSubmit} aria-label="ICAO search">
-        <input
-          className="vatsim-input"
-          type="text"
-          value={icao}
-          onChange={(e) => setIcao(e.target.value.toUpperCase())}
-          placeholder="e.g. EGLL"
-          maxLength={4}
-          minLength={3}
-          spellCheck={false}
-          autoComplete="off"
-          autoCorrect="off"
-          autoCapitalize="characters"
-          aria-label="ICAO airport code"
-        />
         <button
-          className="btn btn-primary"
+          className="lookup-search__button"
           type="submit"
           disabled={status === 'loading' || icao.trim().length < 3}
         >
-          <RefreshCw size={18} />
-          {status === 'loading' ? 'Fetching…' : 'Fetch METAR'}
+          {status === 'loading' ? 'Fetching...' : 'Fetch METAR'}
         </button>
       </form>
 
-      <div className="vatsim-quick-picks" aria-label="Quick pick airports">
+      <div className="quick-picks" aria-label="Quick pick airports">
+        <span>Quick</span>
         {QUICK_PICKS.map((code) => (
           <button
             key={code}
-            className="pill vatsim-quick-btn"
+            className="quick-pick"
             onClick={() => { setIcao(code); load(code); }}
             disabled={status === 'loading'}
             type="button"
@@ -99,10 +91,10 @@ export function VatsimMetarPage() {
       </div>
 
       {status === 'error' && (
-        <div className="vatsim-error glass" role="alert">
+        <div className="vatsim-error" role="alert">
           <p className="vatsim-error__msg">{error}</p>
           <button
-            className="btn btn-ghost"
+            className="text-button"
             onClick={() => { setStatus('idle'); setError(''); }}
             type="button"
           >
@@ -112,12 +104,24 @@ export function VatsimMetarPage() {
       )}
 
       {status === 'loading' && (
-        <p className="loading">Fetching METAR for {icao.trim().toUpperCase()}…</p>
+        <p className="loading">Fetching METAR for {icao.trim().toUpperCase()}...</p>
       )}
 
       {result && status === 'ready' && (
-        <section className="grid vatsim-result" aria-label="METAR result">
-          <VatsimMetarCard icao={result.icao} raw={result.raw} decoded={result.decoded} />
+        <section className="metar-grid metar-grid--lookup" aria-label="METAR result">
+          <VatsimMetarCard
+            icao={result.icao}
+            raw={result.raw}
+            decoded={result.decoded}
+            airportInfo={result.airportInfo}
+          />
+        </section>
+      )}
+
+      {!result && status !== 'loading' && status !== 'error' && (
+        <section className="lookup-empty" aria-label="Live airport weather">
+          <h1>Live airport weather</h1>
+          <p>Enter any ICAO code to pull the current METAR from<br />the VATSIM network.</p>
         </section>
       )}
     </main>

@@ -3,13 +3,12 @@ import { fetchPlan, parseMetars } from './api/simbrief';
 import AirportCard from './components/AirportCard';
 import ErrorScreen from './components/ErrorScreen';
 import { AirportMetar, Status } from './types';
-import { RefreshCw, Navigation } from './icons';
 
 function App() {
   const [status, setStatus] = useState<Status>('idle');
   const [airports, setAirports] = useState<AirportMetar[]>([]);
   const [error, setError] = useState<string>('');
-  const [showAlternate, setShowAlternate] = useState<boolean>(false);
+  const [showAlternate, setShowAlternate] = useState(false);
 
   const load = async () => {
     setStatus('loading');
@@ -30,9 +29,20 @@ function App() {
     load();
   }, []);
 
+  const routeTitle = useMemo(() => {
+    const departure = airports.find((ap) => ap.role === 'departure')?.icao;
+    const destination = airports.find((ap) => ap.role === 'destination')?.icao;
+    return departure && destination ? `${departure} -> ${destination}` : 'Flight Plan METAR';
+  }, [airports]);
+
   const visibleAirports = useMemo(
     () => airports.filter((ap) => ap.role !== 'alternate' || showAlternate),
     [airports, showAlternate]
+  );
+
+  const alternateCount = useMemo(
+    () => airports.filter((ap) => ap.role === 'alternate').length,
+    [airports]
   );
 
   if (status === 'error') {
@@ -41,32 +51,27 @@ function App() {
 
   return (
     <main className="page" aria-live="polite">
-      <header className="hero glass">
+      <header className="flight-hero">
         <div>
-          <p className="eyebrow">SimBrief • METAR Focus</p>
-          <h1>Approach-Ready METARs</h1>
-          <p className="muted">Departure and destination in a clean, high-contrast layout.</p>
+          <h1>{routeTitle}</h1>
+          <p>Live from SimBrief</p>
         </div>
-        <div className="hero__actions">
+        {alternateCount > 0 && (
           <button
-            className={`btn btn-ghost ${showAlternate ? 'btn-ghost--active' : ''}`}
-            onClick={() => setShowAlternate((v) => !v)}
+            className={`alternate-toggle${showAlternate ? ' alternate-toggle--active' : ''}`}
+            type="button"
+            onClick={() => setShowAlternate((value) => !value)}
           >
-            <Navigation size={18} />
-            {showAlternate ? 'Hide Alternate' : 'Show Alternate'}
+            {showAlternate ? 'Hide Alternate' : `Show Alternate (${alternateCount})`}
           </button>
-          <button className="btn btn-primary" onClick={load} disabled={status === 'loading'}>
-            <RefreshCw size={18} />
-            {status === 'loading' ? 'Fetching…' : 'Refresh'}
-          </button>
-        </div>
+        )}
       </header>
 
       {status === 'loading' && airports.length === 0 ? (
-        <div className="loading">Fetching latest METAR…</div>
+        <div className="loading">Fetching latest METAR...</div>
       ) : null}
 
-      <section className="grid" aria-label="Airports METAR list">
+      <section className="metar-grid" aria-label="Airports METAR list">
         {visibleAirports.map((ap) => (
           <AirportCard key={`${ap.role}-${ap.icao}`} airport={ap} />
         ))}

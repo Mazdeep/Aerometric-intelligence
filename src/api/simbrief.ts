@@ -42,6 +42,7 @@ export function parseMetars(doc: Document): AirportMetar[] {
 
 function extractAirport(node: Element, role: AirportRole): AirportMetar | null {
   const icao = textContent(node, 'icao_code') || textContent(node, 'icao');
+  const iataCode = textContent(node, 'iata_code') || undefined;
   const name = textContent(node, 'name') || undefined;
   const metarRaw = textContent(node, 'metar');
   const metarTime = textContent(node, 'metar_time') || undefined;
@@ -56,6 +57,7 @@ function extractAirport(node: Element, role: AirportRole): AirportMetar | null {
   return {
     role,
     icao,
+    iataCode,
     name,
     metarRaw,
     metarTime,
